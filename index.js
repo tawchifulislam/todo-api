@@ -1,5 +1,7 @@
 const express = require('express');
 const app = express();
+const swaggerUi = require('swagger-ui-express');
+const openapiDocument = require('./openapi.json');
 const PORT = 3000;
 
 const tasks = [
@@ -8,6 +10,7 @@ const tasks = [
   { id: 3, title: 'Read a book', done: false },
 ];
 
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapiDocument));
 app.use(express.json());
 
 // Stage 1- root and health check endpoints
@@ -74,9 +77,7 @@ app.put('/tasks/:id', (req, res) => {
 
   if (title !== undefined) {
     if (typeof title !== 'string' || title.trim() === '') {
-      return res
-        .status(400)
-        .json({ error: 'title cannot be empty' });
+      return res.status(400).json({ error: 'title cannot be empty' });
     }
     task.title = title.trim();
   }
