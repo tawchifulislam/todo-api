@@ -8,6 +8,8 @@ const tasks = [
   { id: 3, title: 'Read a book', done: false },
 ];
 
+app.use(express.json());
+
 // Stage 1- root and health check endpoints
 
 app.get('/', (req, res) => {
@@ -31,6 +33,25 @@ app.get('/tasks/:id', (req, res) => {
     return res.status(404).json({ error: 'Task not found' });
   }
   res.json(task);
+});
+
+// Stage 3- Create: Add a new task
+app.post('/tasks', (req, res) => {
+  const { title } = req.body;
+
+  if (!title || title.trim() === '') {
+    return res
+      .status(400)
+      .json({ error: 'title is required and cannot be empty' });
+  }
+
+  const newTask = {
+    id: tasks.length === 0 ? 1 : Math.max(...tasks.map(t => t.id)) + 1,
+    title: title.trim(),
+    done: false,
+  };
+  tasks.push(newTask);
+  res.status(201).json(newTask);
 });
 
 app.listen(PORT, () => {
