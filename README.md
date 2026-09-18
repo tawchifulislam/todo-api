@@ -1,6 +1,6 @@
 # Task API
 
-A small **in-memory CRUD API** built with Node.js and Express. It manages a to-do list - you can create, read, update, and delete tasks. Data is stored in memory, so it resets whenever the server restarts (no database yet).
+A small **CRUD API** built with Node.js and Express. It manages a to-do list, you can create, read, update, and delete tasks. Data is stored in a SQLite database, so it persists across server restarts.
 
 ## How to run
 
@@ -11,7 +11,7 @@ npm install
 node index.js
 ```
 
-The server will start on `http://localhost:3000`.
+The server will start on `http://localhost:3000`. A `tasks.db` file is created automatically on first run.
 
 ## Endpoints
 
@@ -53,16 +53,38 @@ With the server running, visit `http://localhost:3000/docs` to view and test all
 
 ![Swagger UI](swagger-screenshot.png)
 
+## Database
+
+This project uses **SQLite** (via `better-sqlite3`) for storage instead of an in-memory array. Data persists across server restarts.
+
+- Database file: `tasks.db` (created automatically on first run, and gitignored so it's never committed)
+- The `tasks` table is created automatically if it doesn't already exist
+- 3 example tasks are seeded only if the table is empty (so restarting the server never duplicates them)
+
+### Why SQLite
+
+SQLite needs no separate server or installation, it's a single file. That makes it a good first step for understanding persistence before moving to a networked database like PostgreSQL.
+
+### Example SQL query
+
+```sql
+SELECT * FROM tasks WHERE done = 1;
+```
+
+### Database screenshot
+
+![Database](db-screenshot.png)
+
 ## Notes
 
-- Data lives only in memory (a plain array) - it's lost on every server restart. Demonstrating this limitation of in-memory storage (without a database).
+- Data now survives server restarts, since it's backed by SQLite instead of an in-memory array.
 
 ## AI vs Me
 
-I hand-built the API in `index.js` (Stages 0–6). For Stage 7, I gave an AI the same starting code and asked it to rewrite it in a better way, with the same features. Its version is in `ai-version/`.
+I hand-built the API in `index.js` (Stages 0-6). For Stage 7, I gave an AI the same starting code and asked it to rewrite it in a better way, with the same features. Its version is in `ai-version/`.
 
 **Prompt used:**
-> Use node and express make a simple crud for todo-api. use as a example i write down in this chat, make this code far more better way. and data will be in-memory. and i also need swagger ui for try it out. index.js, openapi.json i need this two file. [+ my Stage 0–6 code]
+> Use node and express make a simple crud for todo-api. use as a example i write down in this chat, make this code far more better way. and data will be in-memory. and i also need swagger ui for try it out. index.js, openapi.json i need this two file. [+ my Stage 0-6 code]
 
 **What the AI did better:**
 
@@ -71,8 +93,8 @@ I hand-built the API in `index.js` (Stages 0–6). For Stage 7, I gave an AI the
 
 **What it changed or added without being asked:**
 
-- Added a catch-all 404 handler for unknown routes - I never asked for this in my prompt.
-- Changed `const tasks` to `let tasks` - not necessary for how the array is used, since only `.push()`/`.splice()` are called.
+- Added a catch-all 404 handler for unknown routes, I never asked for this in my prompt.
+- Changed `const tasks` to `let tasks`, not necessary for how the array is used, since only `.push()`/`.splice()` are called.
 
 **What my prompt didn't specify:**
 
