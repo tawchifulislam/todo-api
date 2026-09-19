@@ -1,17 +1,17 @@
 # Task API
 
-A small **CRUD API** built with Node.js and Express. It manages a to-do list, you can create, read, update, and delete tasks. Data is stored in a SQLite database, so it persists across server restarts.
+A small **CRUD API** built with Node.js and Express. It manages a to-do list, you can create, read, update, and delete tasks. Data is stored in a **PostgreSQL** database running in Docker, so it persists across restarts.
 
 ## How to run
 
 ```bash
 git clone https://github.com/tawchifulislam/todo-api.git
 cd todo-api
-npm install
-node index.js
+cp .env.example .env
+docker compose up
 ```
 
-The server will start on `http://localhost:3000`. A `tasks.db` file is created automatically on first run.
+The API will be available at `http://localhost:3001`. Postgres and the app both start together, and a `tasks` table with 3 example tasks is created automatically on first run.
 
 ## Endpoints
 
@@ -38,46 +38,48 @@ The server will start on `http://localhost:3000`. A `tasks.db` file is created a
 ## Example
 
 ```console
-$ curl -i -X POST http://localhost:3000/tasks -H "Content-Type: application/json" -d '{"title":"Buy milk"}'
+$ curl -i -X POST http://localhost:3001/tasks -H "Content-Type: application/json" -d '{"title":"Persistence via compose"}'
 HTTP/1.1 201 Created
 X-Powered-By: Express
 Content-Type: application/json; charset=utf-8
-Content-Length: 40
+Content-Length: 55
 
-{"id":4,"title":"Buy milk","done":false}
+{"id":4,"title":"Persistence via compose","done":false}
 ```
 
 ## Swagger UI
 
-With the server running, visit `http://localhost:3000/docs` to view and test all endpoints interactively via "Try it out".
+With the app running, visit `http://localhost:3001/docs` to view and test all endpoints interactively via "Try it out".
 
 ![Swagger UI](swagger-screenshot.png)
 
 ## Database
 
-This project uses **SQLite** (via `better-sqlite3`) for storage instead of an in-memory array. Data persists across server restarts.
+This project runs **PostgreSQL in a Docker container**, replacing the SQLite file used in an earlier version of this project. Data persists in a Docker volume, so it survives both app restarts and full `docker compose down` / `up` cycles.
 
-- Database file: `tasks.db` (created automatically on first run, and gitignored so it's never committed)
-- The `tasks` table is created automatically if it doesn't already exist
-- 3 example tasks are seeded only if the table is empty (so restarting the server never duplicates them)
+- Connection is configured via `DATABASE_URL` in `.env` (gitignored). `.env.example` shows the required keys with placeholder values.
+- The `tasks` table is created automatically if it doesn't already exist, and 3 example tasks are seeded only if the table is empty.
+- Postgres data is stored in a named Docker volume (`taskdata`), independent of the container's lifecycle, so removing and recreating the containers doesn't lose data.
+- The app and database run as two services (`api` and `db`) defined in `compose.yaml`, started together with a single `docker compose up`.
 
-### Why SQLite
+### Why PostgreSQL in Docker
 
-SQLite needs no separate server or installation, it's a single file. That makes it a good first step for understanding persistence before moving to a networked database like PostgreSQL.
+Postgres runs as its own server process instead of living in a single file, matching how most real backends store data. Docker means no manual installation, and the same setup runs identically on any machine.
 
 ### Example SQL query
 
 ```sql
-SELECT * FROM tasks WHERE done = 1;
+SELECT * FROM tasks WHERE done = true;
 ```
 
 ### Database screenshot
 
-![Database](db-screenshot.png)
+![Database](db-screenshot-postgres.png)
 
 ## Notes
 
-- Data now survives server restarts, since it's backed by SQLite instead of an in-memory array.
+- Data now lives in a containerized PostgreSQL database instead of SQLite or an in-memory array. A full `docker compose down` followed by `up` was tested and confirmed the data survives.
+- This project has gone through three storage backends as part of a learning track: an in-memory array, then SQLite, then this containerized Postgres setup. The API's routes and behavior stayed the same throughout; only the storage layer changed.
 
 ## AI vs Me
 
