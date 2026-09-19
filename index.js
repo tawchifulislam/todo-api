@@ -2,7 +2,43 @@ const express = require('express');
 const app = express();
 const swaggerUi = require('swagger-ui-express');
 const openapiDocument = require('./openapi.json');
-const PORT = 3000;
+const PORT = 3001;
+require('dotenv').config();
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+async function setupDatabase() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      done BOOLEAN NOT NULL DEFAULT false
+    )
+  `);
+
+  const result = await pool.query('SELECT COUNT(*) FROM tasks');
+  const count = Number(result.rows[0].count);
+
+  if (count === 0) {
+    await pool.query('INSERT INTO tasks (title, done) VALUES ($1, $2)', [
+      'Buy groceries',
+      false,
+    ]);
+    await pool.query('INSERT INTO tasks (title, done) VALUES ($1, $2)', [
+      'Walk 1 km',
+      true,
+    ]);
+    await pool.query('INSERT INTO tasks (title, done) VALUES ($1, $2)', [
+      'Read a book',
+      false,
+    ]);
+  }
+}
+
+setupDatabase();
 
 const Database = require('better-sqlite3');
 const db = new Database('tasks.db');
