@@ -1,0 +1,5 @@
+node_modules
+.env
+.git
+ai-version
+tasks.db
