@@ -2,9 +2,15 @@ const express = require('express');
 const app = express();
 const swaggerUi = require('swagger-ui-express');
 const openapiDocument = require('./openapi.json');
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 require('dotenv').config();
 const { Pool } = require('pg');
+const { createClient } = require('@supabase/supabase-js');
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY,
+);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
