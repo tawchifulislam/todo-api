@@ -99,6 +99,24 @@ app.post('/auth/login', async (req, res) => {
   });
 });
 
+// Stage 2 - Public & Protected Gates
+
+app.get('/public/info', (req, res) => {
+  res.json({ message: 'Welcome stranger! This info is public.' });
+});
+
+app.get('/protected/profile', (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  res.json({ message: 'Token received (not yet verified)', token });
+});
+
 // Stage 2- Read: List and Single Task
 
 app.get('/tasks', async (req, res) => {
