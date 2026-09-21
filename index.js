@@ -49,6 +49,26 @@ setupDatabase();
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapiDocument));
 app.use(express.json());
 
+async function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  const { data, error } = await supabase.auth.getUser(token);
+
+  if (error || !data.user) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  req.user = data.user;
+  req.token = token;
+  next();
+}
+
 // Stage 1- root and health check endpoints
 
 app.get('/', (req, res) => {
@@ -99,32 +119,32 @@ app.post('/auth/login', async (req, res) => {
   });
 });
 
+app.post('/auth/logout', requireAuth, async (req, res) => {
+  const { error } = await supabase.auth.signOut(req.token);
+
+  if (error) {
+    return res.status(400).json({ error: 'Failed to logout' });
+  }
+
+  res.status(204).send();
+});
+
 // Stage 2 - Public & Protected Gates
 
 app.get('/public/info', (req, res) => {
   res.json({ message: 'Welcome stranger! This info is public.' });
 });
 
-app.get('/protected/profile', async (req, res) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  const token = authHeader.split(' ')[1];
-
-  const { data, error } = await supabase.auth.getUser(token);
-
-  if (error || !data.user) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-
+app.get('/protected/profile', requireAuth, async (req, res) => {
   res.status(200).json({
-    id: data.user.id,
-    email: data.user.email,
-    created_at: data.user.created_at,
+    id: req.user.id,
+    email: req.user.email,
+    created_at: req.user.created_at,
   });
+});
+
+app.get('/protected/dashboard', requireAuth, (req, res) => {
+  res.json({ message: `Welcome to your dashboard, ${req.user.email}` });
 });
 
 // Stage 2- Read: List and Single Task
