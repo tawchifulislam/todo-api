@@ -4,6 +4,15 @@
     "title": "Task API",
     "version": "1.0.0"
   },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
   "paths": {
     "/tasks": {
       "get": {
@@ -77,6 +86,96 @@
         "responses": {
           "204": { "description": "Task deleted" },
           "404": { "description": "Task not found" }
+        }
+      }
+    },
+    "/auth/signup": {
+      "post": {
+        "summary": "Create a new user account",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                },
+                "required": ["email", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "User created" },
+          "400": { "description": "Missing or invalid fields" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Authenticate and return a JWT",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                },
+                "required": ["email", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful, returns access and refresh tokens"
+          },
+          "400": { "description": "Missing fields" },
+          "401": { "description": "Invalid login credentials" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "End the user's session",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "204": { "description": "Successfully logged out" },
+          "400": { "description": "Logout failed" },
+          "401": { "description": "Missing, invalid, or expired token" }
+        }
+      }
+    },
+    "/public/info": {
+      "get": {
+        "summary": "Public, unprotected info",
+        "responses": {
+          "200": { "description": "Public message" }
+        }
+      }
+    },
+    "/protected/profile": {
+      "get": {
+        "summary": "Read private user profile data",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "User profile" },
+          "401": { "description": "Missing, invalid, or expired token" }
+        }
+      }
+    },
+    "/protected/dashboard": {
+      "get": {
+        "summary": "Read private dashboard data",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Dashboard welcome message" },
+          "401": { "description": "Missing, invalid, or expired token" }
         }
       }
     }
