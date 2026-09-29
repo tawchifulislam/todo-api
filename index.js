@@ -8,6 +8,7 @@ const { Pool } = require('pg');
 const { createClient } = require('@supabase/supabase-js');
 const { z } = require('zod');
 const { ExtractOutputSchema } = require('./llm/schema');
+const { callExtractModel } = require('./llm/client');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -296,7 +297,8 @@ app.post('/extract', async (req, res) => {
     return res.status(200).json(stubResponse);
   }
 
-  res.status(501).json({ error: 'Model call not implemented yet' });
+  const rawOutput = await callExtractModel(inputResult.data.text);
+  res.status(200).json({ raw: rawOutput });
 });
 
 app.listen(PORT, () => {
