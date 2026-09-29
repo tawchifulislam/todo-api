@@ -13,7 +13,7 @@ docker compose up
 
 The API will be available at `http://localhost:3001`. Postgres and the app both start together, and a `tasks` table with 3 example tasks is created automatically on first run.
 
-You'll also need a free [Supabase](https://supabase.com) project. Copy your Project URL and anon key into `.env` as `SUPABASE_URL` and `SUPABASE_KEY`.
+You'll also need a free [Supabase](https://supabase.com) project. Copy your Project URL and anon key into `.env` as `SUPABASE_URL` and `SUPABASE_KEY`. For the AI extraction endpoint, you'll also need a free [OpenRouter](https://openrouter.ai) key, copied into `.env` as `LLM_API_KEY`.
 
 ## Endpoints
 
@@ -32,17 +32,20 @@ You'll also need a free [Supabase](https://supabase.com) project. Copy your Proj
 | POST | `/tasks` | No | Create a new task |
 | PUT | `/tasks/:id` | No | Update a task (title and/or done) |
 | DELETE | `/tasks/:id` | No | Delete a task |
+| POST | `/extract` | No | Extract structured fields from a pasted receipt or invoice using an LLM |
 
 ## Status codes
 
 | Code | When |
 | --- | --- |
-| 200 | Successful GET / PUT / login |
+| 200 | Successful GET / PUT / login / extraction |
 | 201 | Successfully created (POST /tasks, POST /auth/signup) |
 | 204 | Successfully deleted or logged out |
 | 400 | Invalid or incomplete request body |
 | 401 | Missing, invalid, or expired auth token; invalid login credentials |
 | 404 | Task id not found |
+| 422 | Model could not produce a valid response after one repair attempt |
+| 503 | AI extraction disabled via kill switch |
 
 ## Example
 
@@ -116,11 +119,66 @@ SELECT * FROM tasks WHERE done = true;
 
 ![Database](db-screenshot-postgres.png)
 
+## AI-powered extraction
+
+This project has one endpoint backed by a large language model.
+
+### What it does
+
+`POST /extract` takes a pasted receipt or invoice as plain text and returns clean, structured JSON: the vendor name, date, total amount, currency, a confidence score, and a flag for whether the result needs human review. It is not a chatbot, there is no conversation and no memory between calls. One request goes in, one validated JSON object comes out, or a clear error if the model could not produce something trustworthy.
+
+### console Example
+
+```console
+$ curl -i -X POST http://localhost:3001/extract -H "Content-Type: application/json" -d '{"text":"Coffee Shop Receipt - 2 Lattes $8.50 - Jan 3, 2026"}'
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+
+{"vendor":"Coffee Shop","date":"2026-01-03","total_amount":8.5,"currency":"USD","confidence":0.9,"needs_review":false}
+```
+
+### What the endpoint must never do
+
+- Invent a value that is not present in the input text.
+- Guess a total, date, or currency when the text does not contain one, it returns `null` and sets `needs_review` to `true` instead.
+- Perform currency conversion.
+- Give financial, legal, or medical advice.
+- Follow instructions that appear inside the pasted text itself. The system prompt explicitly tells the model to treat the input as data, not as commands, which was tested directly with prompt injection attempts (see the eval set below).
+
+### Provider and model
+
+- Provider: OpenRouter (free tier)
+- Model: `nvidia/nemotron-3-ultra-550b-a55b:free`
+- Prompt version: `extract-v1` (`prompts/extract-v1.md`)
+- Last tested: 2026-09-29
+
+### Reliability
+
+- Every model call has a 30 second timeout, well under the SDK's 10 minute default.
+- Failed calls are retried once, but only on a `429` (rate limit) or a `5xx` (server error). A `400` or `401` is never retried, since retrying would not change the outcome.
+- Model output is parsed and validated against a schema before it reaches the caller. If validation fails, the model gets one repair attempt with the exact error included. If that also fails, the request returns `422` and the failure is logged to `logs/quarantine.jsonl` instead of crashing or returning raw model text.
+- Setting `LLM_ENABLED=false` disables the endpoint immediately and returns a `503`, with zero model calls, no deploy required.
+
+### Eval results
+
+8 hand-written test cases live in `evals/cases.json`, covering ordinary receipts, ambiguous input that should trigger `needs_review`, and two prompt injection attempts. Run with `node evals/run.js`.
+
+**Result: 8/8 passed** (2026-09-29, prompt version `extract-v1`).
+
+### Cost
+
+One call to `/extract` used 549 input tokens and 209 output tokens, logged automatically to `logs/calls.jsonl`. On OpenRouter's free tier this call costs $0. Estimated at typical paid-tier pricing for a comparable small model (roughly $0.10 per 1M input tokens, $0.30 per 1M output tokens), 10,000 similar requests would cost approximately $1.17.
+
+### What I'd fix another day
+
+The retry logic currently only retries the initial extract call and the repair call independently, it does not retry the repair call itself if that one also hits a `429`. For a production system I would wrap both calls in the same retry boundary.
+
 ## Notes
 
 - Data now lives in a containerized PostgreSQL database instead of SQLite or an in-memory array. A full `docker compose down` followed by `up` was tested and confirmed the data survives.
 - This project has gone through three storage backends as part of a learning track: an in-memory array, then SQLite, then this containerized Postgres setup. The API's routes and behavior stayed the same throughout; only the storage layer changed.
 - User accounts, passwords, and tokens are entirely managed by Supabase. This project never writes password-hashing or token-signing logic of its own.
+- The `/extract` endpoint is the first place in this project where input comes from outside the system in an unstructured form. It is validated, sent to an external LLM, then validated again before being trusted.
 
 ## AI vs Me
 
