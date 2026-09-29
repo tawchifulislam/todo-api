@@ -8,7 +8,13 @@ const { Pool } = require('pg');
 const { createClient } = require('@supabase/supabase-js');
 const { z } = require('zod');
 const { ExtractOutputSchema } = require('./llm/schema');
-const { callExtractModel } = require('./llm/client');
+const {
+  callExtractModel,
+  callRepairModel,
+  PROMPT_VERSION,
+} = require('./llm/client');
+const { extractJson } = require('./llm/parse');
+const fs = require('fs');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -297,8 +303,51 @@ app.post('/extract', async (req, res) => {
     return res.status(200).json(stubResponse);
   }
 
-  const rawOutput = await callExtractModel(inputResult.data.text);
-  res.status(200).json({ raw: rawOutput });
+  const userText = inputResult.data.text;
+
+  let rawOutput = await callExtractModel(userText);
+  let parsed = extractJson(rawOutput);
+  let validation = parsed
+    ? ExtractOutputSchema.safeParse(parsed)
+    : { success: false, error: { message: 'JSON parse failed' } };
+
+  if (!validation.success) {
+    const errorMessage = parsed
+      ? JSON.stringify(validation.error.issues)
+      : 'Response was not valid JSON';
+
+    rawOutput = await callRepairModel(userText, rawOutput, errorMessage);
+    parsed = extractJson(rawOutput);
+    validation = parsed
+      ? ExtractOutputSchema.safeParse(parsed)
+      : {
+          success: false,
+          error: { message: 'JSON parse failed on repair attempt' },
+        };
+  }
+
+  if (!validation.success) {
+    const quarantineEntry = {
+      timestamp: new Date().toISOString(),
+      input: userText,
+      prompt_version: PROMPT_VERSION,
+      raw_output: rawOutput,
+      error: parsed ? validation.error.issues : 'JSON parse failed',
+    };
+
+    fs.mkdirSync('logs', { recursive: true });
+    fs.appendFileSync(
+      'logs/quarantine.jsonl',
+      JSON.stringify(quarantineEntry) + '\n',
+    );
+
+    return res.status(422).json({
+      error:
+        'Model could not produce a valid response after one repair attempt',
+    });
+  }
+
+  res.status(200).json(validation.data);
 });
 
 app.listen(PORT, () => {
