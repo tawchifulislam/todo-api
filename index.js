@@ -291,6 +291,12 @@ app.post('/extract', async (req, res) => {
     });
   }
 
+  if (process.env.LLM_ENABLED === 'false') {
+    return res
+      .status(503)
+      .json({ error: 'AI extraction is temporarily disabled' });
+  }
+
   if (process.env.LLM_STUB === '1') {
     const stubResponse = {
       vendor: 'Example Vendor',
