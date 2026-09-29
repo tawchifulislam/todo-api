@@ -6,6 +6,8 @@ const PORT = process.env.PORT || 3001;
 require('dotenv').config();
 const { Pool } = require('pg');
 const { createClient } = require('@supabase/supabase-js');
+const { z } = require('zod');
+const { ExtractOutputSchema } = require('./llm/schema');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -118,6 +120,28 @@ app.post('/auth/login', async (req, res) => {
     refresh_token: data.session.refresh_token,
   });
 });
+
+// Auth middleware
+
+async function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  const { data, error } = await supabase.auth.getUser(token);
+
+  if (error || !data.user) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  req.user = data.user;
+  req.token = token;
+  next();
+}
 
 app.post('/auth/logout', requireAuth, async (req, res) => {
   const { error } = await supabase.auth.signOut(req.token);
@@ -242,6 +266,37 @@ app.delete('/tasks/:id', async (req, res) => {
 
   await pool.query('DELETE FROM tasks WHERE id = $1', [taskId]);
   res.status(204).send();
+});
+
+// Extract: LLM-backed endpoint (A17)
+
+const ExtractInputSchema = z.object({
+  text: z.string().min(1).max(3000),
+});
+
+app.post('/extract', async (req, res) => {
+  const inputResult = ExtractInputSchema.safeParse(req.body);
+
+  if (!inputResult.success) {
+    const issue = inputResult.error.issues[0];
+    return res.status(400).json({
+      error: `Invalid input: ${issue.path.join('.')} - ${issue.message}`,
+    });
+  }
+
+  if (process.env.LLM_STUB === '1') {
+    const stubResponse = {
+      vendor: 'Example Vendor',
+      date: '2026-01-15',
+      total_amount: 42.5,
+      currency: 'USD',
+      confidence: 0.9,
+      needs_review: false,
+    };
+    return res.status(200).json(stubResponse);
+  }
+
+  res.status(501).json({ error: 'Model call not implemented yet' });
 });
 
 app.listen(PORT, () => {
